@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+
+  <!-- jQuery library -->
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+
+  <!-- Latest compiled JavaScript -->
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"
+    crossorigin="anonymous"></script>
+  <script src="socket.js"></script>
+
+  <title>Document</title>
+</head>
+
+
+<body>
+  <div class="container">
+    <div class="row">
+      <div class="col-md-4">
+
+        <div class="well">
+          <h3>Online Users:</h3>
+          <ul class="list-group" id="users"></ul>
+        </div>
+
+      </div>
+      <div class="col-md-8">
+        <div class="chat" id="chat"></div>
+       
+          <div class="form-group">
+            <label>Chat</label>
+            <textarea class="form-control" id="areamessage" rows="20" cols="40"></textarea>
+            <label>Enter Message</label>
+            <input type="text" class="form-control" id="message">
+            <br />
+            <input type="button" id="btn" class="btn btn-primary" value="Send">
+          </div>
+        
+
+      </div>
+    </div>
+  </div>
+
+
+
+  <script>
+
+    function toBinary(data) {
+      data = JSON.stringify(data);
+      var string = btoa(unescape(encodeURIComponent(data))),
+        charList = string.split(''),
+        uintArray = [];
+      for (var i = 0; i < charList.length; i++) {
+        uintArray.push(charList[i].charCodeAt(0));
+      }
+      return new Uint8Array(uintArray);
+    }
+
+    function toJSON(uintArray) {
+      uintArray = new Uint8Array(uintArray);
+      var encodedString = String.fromCharCode.apply(null, uintArray);
+      return JSON.parse(encodedString);
+    }
+
+    var btn = document.getElementById('btn');
+    var el = document.getElementsByName('userschek');
+    var bodymessege = document.getElementById('message');
+    var areamessage = document.getElementById('areamessage');
+    var listonline = document.getElementById('users');
+   // var socket = io('localhost:3000');
+    var socket = io('10.35.1.172:3000');
+
+
+    user = prompt("Introdu numele");
+    var user_id = localStorage.getItem('id');
+    if (!user_id) {
+      user_id = Math.floor(Math.random() * 1000);
+      localStorage.setItem('id', user_id);
+    }
+    socket.emit('init', toBinary({
+      id: user_id,
+      name: user
+    }));
+    console.log("mu id: "+ user_id);
+    socket.on('init:res', function () {
+      socket.emit('getParticipants');
+      socket.on('getParticipants:res', function (data) {
+
+        listonline.innerHTML = '';
+        var participant = toJSON(data);
+        for (i = 0; i < participant.length; i++) {
+          var li = document.createElement("li");
+          if (participant[i].id != user_id) {
+            var checkbox = document.createElement('input');
+            checkbox.type = "checkbox";
+            checkbox.id = participant[i].id;
+            checkbox.value = participant[i].name;
+            checkbox.className = 'form-check-input';
+            checkbox.name = 'userschek'
+            li.appendChild(checkbox);
+          }
+          li.appendChild(document.createTextNode(participant[i].name));
+          li.setAttribute("class", "list-group-item");
+          var circl = document.createElement('span');
+          if(participant[i].online){
+            circl.className='dot_green'; 
+          }
+          else
+          circl.className='dot_red';
+          li.appendChild(circl);
+          listonline.appendChild(li);
+          
+        }
+
+      });
+
+              socket.emit('archive');
+        socket.on('archive:res', function(data){
+          var ar = toJSON(data);
+          for(i=0;i<ar.length;i++){
+            areamessage.value += ar[i].from + ': ' + ar[i].body + '\n';
+          }
+          
+          
+        })
+    });
+bodymessege.addEventListener('keyup', function(ev){
+if(ev.keyCode==13){
+  for (i = 0; i < el.length; i++) {
+        if (el[i].checked) {
+          socket.emit('message', toBinary({
+            to: el[i].id,
+            from: user,
+            body: bodymessege.value
+          }));
+        }
+      }
+      areamessage.value += user + ': ' + bodymessege.value + '\n';
+      bodymessege.value = null;
+}
+})
+    btn.onclick = function () {
+      for (i = 0; i < el.length; i++) {
+        if (el[i].checked) {
+          socket.emit('message', toBinary({
+            to: el[i].id,
+            from: user,
+            body: bodymessege.value
+          }));
+        }
+      }
+      areamessage.value += user + ': ' + bodymessege.value + '\n';
+      bodymessege.value = null;
+    };
+
+    socket.on('message', function (data) {
+      var msg = toJSON(data);
+      areamessage.value += msg.from + ': ' + msg.body + '\n';
+    })
+
+
+    socket.on('update', function (data) {
+      while (listonline.hasChildNodes()) {
+       listonline.removeChild(listonline.firstChild);
+     }
+      socket.emit('getParticipants');
+    });
+  </script>
+</body>
+
+</html>
