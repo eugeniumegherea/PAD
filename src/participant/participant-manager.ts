@@ -1,16 +1,21 @@
 import { toJSON, toBinary } from "../binary-utils";
+import { MemQueue } from "../memqueue";
 
 
 export interface Participant {
   id: string;
   conn: any;
-  name? : string;
+  name?: string;
+  online: boolean;
 }
 
 export class ParticipantsManager {
   participants: Participant[] = [];
+  queue: MemQueue = new MemQueue();
 
   add(client) {
+
+    let clientId: string = '';
 
     client.on('init', (buff: Buffer) => {
       const obj: {
@@ -18,23 +23,26 @@ export class ParticipantsManager {
         name: string
       } = toJSON(buff);
 
+      clientId = obj.id;
+
       const c = this.find(obj.id);
       if (!c) {
         this.participants.push({
           id: obj.id,
           conn: client,
-          name: obj.name
+          name: obj.name,
+          online: true
         });
       } else {
         c.conn = client;
         c.name = obj.name;
+        c.online = true;
       }
       client.emit('init:res');
       this.broadcast('update', {
         participants: this.serializeParticipants()
-      }, (p) => {
-        return p.conn.id !== client.id;
       });
+      
     });
     client.on('getParticipants', () => {
       client.emit('getParticipants:res', toBinary(this.serializeParticipants()));
@@ -43,23 +51,34 @@ export class ParticipantsManager {
       json = toJSON(json);
       const c = this.find(json.to);
       if (c) {
-        c.conn.emit('message', toBinary({
-          from: json.from,
-          body: json.body
-        }));
+        if (c.online) {
+          c.conn.emit('message', toBinary({
+            from: json.from,
+            body: json.body
+          }));
+        } else {
+          this.queue.push(json.to, json);
+        }
       }
     });
 
+    client.on('archive', () => {
+      const a = this.queue.popAll(clientId);
+      console.log(a);
+      
+      client.emit('archive:res', toBinary(a));
+    });
+
     client.on('disconnect', () => {
-      for (let i = 0; i < this.participants.length; i++) {
-        if (this.participants[i].conn.id === client.id) {
-          this.participants.splice(i, 1);
-          this.broadcast('update', {
-            participants: this.serializeParticipants()
-          });
-          break;
-        }
-      } 
+      
+      const c = this.find(clientId);
+      if (c) {
+        c.online = false;
+        
+        this.broadcast('update', {
+          participants: this.serializeParticipants()
+        });
+      }
     });
   }      
 
@@ -81,12 +100,13 @@ export class ParticipantsManager {
       });
   }
 
-  serializeParticipants() {
+  serializeParticipants() {   
     return this.participants
       .map((p) => {
         return {
           id: p.id,
-          name: p.name
+          name: p.name,
+          online: p.online
         };
       });
   }

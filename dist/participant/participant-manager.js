@@ -1,31 +1,35 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 var binary_utils_1 = require("../binary-utils");
+var memqueue_1 = require("../memqueue");
 var ParticipantsManager = /** @class */ (function () {
     function ParticipantsManager() {
         this.participants = [];
+        this.queue = new memqueue_1.MemQueue();
     }
     ParticipantsManager.prototype.add = function (client) {
         var _this = this;
+        var clientId = '';
         client.on('init', function (buff) {
             var obj = binary_utils_1.toJSON(buff);
+            clientId = obj.id;
             var c = _this.find(obj.id);
             if (!c) {
                 _this.participants.push({
                     id: obj.id,
                     conn: client,
-                    name: obj.name
+                    name: obj.name,
+                    online: true
                 });
             }
             else {
                 c.conn = client;
                 c.name = obj.name;
+                c.online = true;
             }
             client.emit('init:res');
             _this.broadcast('update', {
                 participants: _this.serializeParticipants()
-            }, function (p) {
-                return p.conn.id !== client.id;
             });
         });
         client.on('getParticipants', function () {
@@ -35,21 +39,29 @@ var ParticipantsManager = /** @class */ (function () {
             json = binary_utils_1.toJSON(json);
             var c = _this.find(json.to);
             if (c) {
-                c.conn.emit('message', binary_utils_1.toBinary({
-                    from: json.from,
-                    body: json.body
-                }));
+                if (c.online) {
+                    c.conn.emit('message', binary_utils_1.toBinary({
+                        from: json.from,
+                        body: json.body
+                    }));
+                }
+                else {
+                    _this.queue.push(json.to, json);
+                }
             }
         });
+        client.on('archive', function () {
+            var a = _this.queue.popAll(clientId);
+            console.log(a);
+            client.emit('archive:res', binary_utils_1.toBinary(a));
+        });
         client.on('disconnect', function () {
-            for (var i = 0; i < _this.participants.length; i++) {
-                if (_this.participants[i].conn.id === client.id) {
-                    _this.participants.splice(i, 1);
-                    _this.broadcast('update', {
-                        participants: _this.serializeParticipants()
-                    });
-                    break;
-                }
+            var c = _this.find(clientId);
+            if (c) {
+                c.online = false;
+                _this.broadcast('update', {
+                    participants: _this.serializeParticipants()
+                });
             }
         });
     };
@@ -74,7 +86,8 @@ var ParticipantsManager = /** @class */ (function () {
             .map(function (p) {
             return {
                 id: p.id,
-                name: p.name
+                name: p.name,
+                online: p.online
             };
         });
     };
