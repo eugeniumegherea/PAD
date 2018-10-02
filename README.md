@@ -1,5 +1,12 @@
 # Server API
 
+### TI-151:
+- Megherea Eugen
+- Ivasisin Ivan
+- Poseletchi Cristian
+- Taranovici Vasilie
+- Petrov Cristina
+
 ## Prerequisites
 - All clients should use socket.io for simplicity
 - All requests should be sent in binary format
