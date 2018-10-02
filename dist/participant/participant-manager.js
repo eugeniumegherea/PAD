@@ -2,9 +2,11 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 var binary_utils_1 = require("../binary-utils");
 var memqueue_1 = require("../memqueue");
+var room_manager_1 = require("../rooms/room-manager");
 var ParticipantsManager = /** @class */ (function () {
     function ParticipantsManager() {
         this.participants = [];
+        this.rooms = new room_manager_1.RoomsManager();
         this.queue = new memqueue_1.MemQueue();
     }
     ParticipantsManager.prototype.add = function (client) {
@@ -35,6 +37,21 @@ var ParticipantsManager = /** @class */ (function () {
         client.on('getParticipants', function () {
             client.emit('getParticipants:res', binary_utils_1.toBinary(_this.serializeParticipants()));
         });
+        client.on('getRooms', function () {
+            var rooms = _this.rooms.getRoomsByParticipant(clientId).map(function (room) {
+                return {
+                    participants: room.participants.map(function (participant) {
+                        return {
+                            id: participant.id,
+                            name: participant.name
+                        };
+                    }),
+                    id: room.id,
+                    name: room.name
+                };
+            });
+            client.emit('getRooms:res', binary_utils_1.toBinary(rooms));
+        });
         client.on('message', function (json) {
             json = binary_utils_1.toJSON(json);
             var c = _this.find(json.to);
@@ -50,9 +67,28 @@ var ParticipantsManager = /** @class */ (function () {
                 }
             }
         });
+        client.on('roommessage', function (json) {
+            json = binary_utils_1.toJSON(json);
+            var room = _this.rooms.getRoomById(json.to);
+            console.log('roommessage', room.id);
+            room.send(binary_utils_1.toBinary({
+                from: json.from,
+                body: json.body
+            }));
+        });
+        client.on('createroom', function (json) {
+            json = binary_utils_1.toJSON(json);
+            var participants = json.participants
+                .concat(clientId)
+                .map(function (id) {
+                return _this.find(id);
+            })
+                .filter(function (participant) { return !!participant; });
+            var room = _this.rooms.create(json.name, participants);
+            client.join(room.id);
+        });
         client.on('archive', function () {
             var a = _this.queue.popAll(clientId);
-            console.log(a);
             client.emit('archive:res', binary_utils_1.toBinary(a));
         });
         client.on('disconnect', function () {

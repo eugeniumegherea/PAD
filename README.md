@@ -38,12 +38,16 @@ Note: not all requests will return a value in response, see later on
 |`init`|An object with:<br> `name {string}` - username to appear in chat<br> `id {string}` - unique random id. | `null`
 |`getParticipants`|`null`|An array of participants (including you). Each participant is an object with `id` and `name` fields.
 |`message`|An object containing:<br>`to {string}` - to whom the message goes<br>`from {string}` - your unique id. If you provide another id, other user will never know from whom the message was<br>`body {string}` - the text message itself|`null`
+|`roommessage`| same as `message` event | null
+|`createroom`|`{ name: {string} - room name, participants: {string[]} - an array of participants id }`|null
+|`getRooms`|null|An array of Rooms in which you are a member of. Each element is an object containing `id` {string}: room id, `name` {string} - room name, |`participants`: {string[]} - an array of participants id's which are members of this group
 
 ### Server --> Client events:
 |Event name|Data|
 |----------|----|
-|`update`|An object which may contain fields which were updated. For now, update is only for notifiing about participant list change.<br>It will contain `participants` field, which is an array of participants (Exactly the same as in `getParticipants` event)
-|`message`|An object containing `from` and `body` fields.
+|`update`|An object which may contain fields which were updated. For now, update is only for notifiing about participant list change.<br>It will contain `participants` field, which is an array of participants (Exactly the same as in `getParticipants` event)|
+|`message`|An object containing `from` and `body` fields.|
+|`inviteRoom`|An object containing `id` {string}: room id, `name` {string} - room name, |`participants`: {string[]} - an array of participants id's which are members of this group|
 
 #### General flow
 1. When page loads, client will ask user to input his/her name.

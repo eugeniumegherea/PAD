@@ -1,5 +1,6 @@
 import { toJSON, toBinary } from "../binary-utils";
 import { MemQueue } from "../memqueue";
+import { RoomsManager, Room } from "../rooms/room-manager";
 
 
 export interface Participant {
@@ -11,6 +12,7 @@ export interface Participant {
 
 export class ParticipantsManager {
   participants: Participant[] = [];
+  rooms: RoomsManager = new RoomsManager();
   queue: MemQueue = new MemQueue();
 
   add(client) {
@@ -42,10 +44,24 @@ export class ParticipantsManager {
       this.broadcast('update', {
         participants: this.serializeParticipants()
       });
-      
     });
     client.on('getParticipants', () => {
       client.emit('getParticipants:res', toBinary(this.serializeParticipants()));
+    });
+    client.on('getRooms', () => {
+      const rooms = this.rooms.getRoomsByParticipant(clientId).map((room: Room) => {
+        return {
+          participants: room.participants.map((participant) => {
+            return {
+              id: participant.id,
+              name: participant.name
+            }
+          }),
+          id: room.id,
+          name: room.name
+        };
+      });
+      client.emit('getRooms:res', toBinary(rooms));
     });
     client.on('message', (json: any) => {
       json = toJSON(json);
@@ -61,11 +77,32 @@ export class ParticipantsManager {
         }
       }
     });
+    client.on('roommessage', (json: any) => {
+      json = toJSON(json);
+      const room: Room = this.rooms.getRoomById(json.to);
+      console.log('roommessage', room.id);
+      
+      room.send(toBinary({
+        from: json.from,
+        body: json.body
+      }));
+    });
+    client.on('createroom', (json: any) => {
+      json = toJSON(json);
+      
+      const participants = json.participants
+      .concat(clientId)
+      .map((id) => {
+        return this.find(id);
+      })
+      .filter((participant: Participant) => !!participant)
+
+      const room = this.rooms.create(json.name, participants);
+      client.join(room.id);
+    });
 
     client.on('archive', () => {
       const a = this.queue.popAll(clientId);
-      console.log(a);
-      
       client.emit('archive:res', toBinary(a));
     });
 
