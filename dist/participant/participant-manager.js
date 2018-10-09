@@ -3,8 +3,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var binary_utils_1 = require("../binary-utils");
 var memqueue_1 = require("../memqueue");
 var room_manager_1 = require("../rooms/room-manager");
+var interceptor_1 = require("../interceptor");
 var ParticipantsManager = /** @class */ (function () {
     function ParticipantsManager() {
+        this.interceptor = new interceptor_1.Interceptor();
         this.participants = [];
         this.rooms = new room_manager_1.RoomsManager();
         this.queue = new memqueue_1.MemQueue();
@@ -61,6 +63,7 @@ var ParticipantsManager = /** @class */ (function () {
                         from: json.from,
                         body: json.body
                     }));
+                    _this.interceptor.write(json);
                 }
                 else {
                     _this.queue.push(json.to, json);
@@ -73,8 +76,10 @@ var ParticipantsManager = /** @class */ (function () {
             console.log('roommessage', room.id);
             room.send(binary_utils_1.toBinary({
                 from: json.from,
+                to: json.to,
                 body: json.body
             }));
+            _this.interceptor.write(json);
         });
         client.on('createroom', function (json) {
             json = binary_utils_1.toJSON(json);
@@ -85,6 +90,9 @@ var ParticipantsManager = /** @class */ (function () {
             })
                 .filter(function (participant) { return !!participant; });
             var room = _this.rooms.create(json.name, participants);
+            participants.forEach(function (participant) {
+                participant.conn.emit('update');
+            });
             client.join(room.id);
         });
         client.on('archive', function () {

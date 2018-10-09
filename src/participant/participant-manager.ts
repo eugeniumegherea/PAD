@@ -1,6 +1,7 @@
 import { toJSON, toBinary } from "../binary-utils";
 import { MemQueue } from "../memqueue";
 import { RoomsManager, Room } from "../rooms/room-manager";
+import { Interceptor } from "../interceptor";
 
 
 export interface Participant {
@@ -11,6 +12,7 @@ export interface Participant {
 }
 
 export class ParticipantsManager {
+  interceptor = new Interceptor();
   participants: Participant[] = [];
   rooms: RoomsManager = new RoomsManager();
   queue: MemQueue = new MemQueue();
@@ -72,6 +74,7 @@ export class ParticipantsManager {
             from: json.from,
             body: json.body
           }));
+          this.interceptor.write(json);
         } else {
           this.queue.push(json.to, json);
         }
@@ -84,13 +87,15 @@ export class ParticipantsManager {
       
       room.send(toBinary({
         from: json.from,
+        to: json.to,
         body: json.body
       }));
+      this.interceptor.write(json);
     });
     client.on('createroom', (json: any) => {
       json = toJSON(json);
       
-      const participants = json.participants
+      const participants: Participant[] = json.participants
       .concat(clientId)
       .map((id) => {
         return this.find(id);
@@ -98,6 +103,9 @@ export class ParticipantsManager {
       .filter((participant: Participant) => !!participant)
 
       const room = this.rooms.create(json.name, participants);
+      participants.forEach((participant) => {
+        participant.conn.emit('update');
+      });
       client.join(room.id);
     });
 
