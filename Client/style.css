@@ -19,3 +19,18 @@ body{
     border-radius: 50%;
     display: inline-block;
 }
+
+#chats{
+    margin-top: 20px;
+ overflow-y: scroll;
+ height: 400px;
+}
+.list-group-item{
+    margin-bottom: 10px;
+}
+
+.glyphicon{
+    
+    margin-right: 5px;
+  
+}
